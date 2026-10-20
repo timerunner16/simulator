@@ -31,7 +31,14 @@ add_subdirectory(sol2)
 
 # ENGINE LIBS
 add_library(core STATIC
-	core/core.cxx)
+	core/core.cxx
+	core/vec2.cxx
+	core/vec3.cxx
+	core/vec4.cxx
+	core/mat2.cxx
+	core/mat3.cxx
+	core/mat4.cxx
+)
 target_include_directories(core INTERFACE core)
 
 add_library(render STATIC
