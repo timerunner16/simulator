@@ -1,5 +1,7 @@
 /*
- *  core/core.cxx
+ *  core.cxx
  *
  *  primary core lib source
  */
+
+#include "core/core.hxx"

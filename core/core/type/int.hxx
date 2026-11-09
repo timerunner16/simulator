@@ -1,16 +1,16 @@
 /*
- *  core/core.hxx
+ *  core/type/int.hxx
  *
- *  primary core lib header
+ *  integer size types
  */
 
-#ifndef simulator_core_core_hxx
-#define simulator_core_core_hxx
+#ifndef simulator_core_type_int_hxx
+#define simulator_core_type_int_hxx
 
 #include <cstddef>
 #include <cstdint>
 
-// standard typedefs
+namespace core {
 using u8 = std::uint8_t;
 using u16 = std::uint16_t;
 using u32 = std::uint32_t;
@@ -22,5 +22,6 @@ using i32 = std::int32_t;
 using i64 = std::int64_t;
 
 using usize = std::size_t;
+} // namespace core
 
 #endif
