@@ -15,6 +15,8 @@
 
 #include "type/monad.hxx"
 
+#include "type/function.hxx"
+
 #include "type/memory.hxx"
 
 #endif

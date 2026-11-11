@@ -64,6 +64,8 @@ target_include_directories(core INTERFACE core)
 
 add_library(render STATIC
 	render/render.cxx)
+target_link_libraries(render PUBLIC core)
+target_link_libraries(render PUBLIC sokol)
 target_include_directories(render INTERFACE render)
 
 add_library(input STATIC
