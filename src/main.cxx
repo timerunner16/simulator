@@ -1,3 +1,5 @@
+#include <print>
+
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
@@ -7,11 +9,17 @@
 
 #include "sokol_imgui.h"
 
-#include "sol/sol.hpp"
+#include <sol/sol.hpp>
+
+#include <core/core.hxx>
+
+#include <render/render.hxx>
+
+using namespace core;
 
 // Holder of graphics state objects
-struct gfx_state_t {
-    sg_pass pass;
+struct GfxState {
+    Option<render::Framebuffer> framebuffer;
 } gfx;
 
 // Holder of Lua + console state
@@ -102,10 +110,11 @@ static void show_console() {
 }
 
 static void init(void) {
-    sg_desc gfx_desc{};
-    gfx_desc.environment = sglue_environment();
-    gfx_desc.logger.func = slog_func;
-    sg_setup(&gfx_desc);
+    if (core::Option<render::InitError> error = render::init()) {
+        std::println("[RENDER] Init Error: {}", (core::usize)error.value());
+        sapp_quit();
+        return;
+    }
 
     simgui_desc_t imgui_desc{};
     imgui_desc.logger.func = slog_func;
@@ -115,17 +124,12 @@ static void init(void) {
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     ImGui::GetIO().ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
 
-    gfx.pass = sg_pass{};
-    gfx.pass.action.colors[0] = {
-        .load_action = SG_LOADACTION_CLEAR,
-        .clear_value = {0.15f, 0.18f, 0.2f, 1.0f},
-    };
+    ImGui::GetIO().Fonts->AddFontDefaultVector();
+
     reset_lua_state();
 }
 
 static void frame(void) {
-    gfx.pass.swapchain = sglue_swapchain();
-
     simgui_frame_desc_t imgui_fdesc{
         .width = sapp_width(),
         .height = sapp_height(),
@@ -139,13 +143,18 @@ static void frame(void) {
 
     show_console();
 
-    sg_begin_pass(&gfx.pass);
-    simgui_render();
-    sg_end_pass();
-    sg_commit();
+    render::pass([]() { simgui_render(); });
+
+    render::present();
 }
 
 static void cleanup(void) {
+    if (core::Option<render::CleanupError> error = render::cleanup()) {
+        std::println("[RENDER] Cleanup Error: {}", (core::usize)error.value());
+        sapp_quit();
+        return;
+    }
+
     simgui_shutdown();
     sg_shutdown();
 }
@@ -164,9 +173,11 @@ sapp_desc sokol_main(int argc, char **argv) {
         .event_cb = event,
         .width = 800,
         .height = 600,
-        .sample_count = 4,
+        .sample_count = 1,
+        .high_dpi = true,
         .window_title = "Simulator",
         .icon = {.sokol_default = true},
         .logger = {.func = slog_func},
+        .html5 = {.ask_leave_site = true},
     };
 }

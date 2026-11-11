@@ -7,4 +7,8 @@
 #ifndef simulator_render_render_hxx
 #define simulator_render_render_hxx
 
+#include "context.hxx"
+#include "framebuffer.hxx"
+#include "image.hxx"
+
 #endif
