@@ -1,7 +1,12 @@
 // source file to create implementation of sokol in static library form
 
-// only build GLES3 as we focus on Emscripten w/ older browser compat
+#ifdef __EMSCRIPTEN__
+// build GLES3 on Emscripten to target WebGL2
 #define SOKOL_GLES3
+#else
+// build Vulkan elsewhere because its cool
+#define SOKOL_VULKAN
+#endif
 
 // implement all sokol libraries
 #define SOKOL_IMPL

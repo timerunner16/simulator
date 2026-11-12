@@ -36,4 +36,6 @@ add_library(lua STATIC
 	lua/lutf8lib.c
 	lua/lvm.c
 	lua/lzio.c)
-target_include_directories(lua PUBLIC lua)
+target_include_directories(lua BEFORE PUBLIC
+	${CMAKE_CURRENT_SOURCE_DIR}
+	${CMAKE_CURRENT_SOURCE_DIR}/lua)
