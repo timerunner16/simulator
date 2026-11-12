@@ -57,22 +57,24 @@ Option<PresentError> present() {
     return {};
 }
 
-Option<PassError> pass(Fn<void> cmd, OptionRef<Framebuffer> framebuffer) {
+Option<PassError> pass(Fn<void> cmd, PassOpt pass_opt) {
     if (!_render_state.initialized)
         return PassError::NOT_INITIALIZED;
     if (_render_state.in_pass)
         return PassError::NESTING_PASS;
 
     sg_pass pass = {};
-    if (framebuffer.has_value()) {
-        Framebuffer &framebuffer_obj = framebuffer.value();
-        pass.attachments.colors[0] = framebuffer_obj._get_color()._get_att_view();
-        pass.attachments.depth_stencil = framebuffer_obj._get_depth()._get_att_view();
+    if (pass_opt.framebuffer.has_value()) {
+        Framebuffer &framebuffer = pass_opt.framebuffer.value();
+        pass.attachments.colors[0] = framebuffer._get_color()._get_att_view();
+        pass.attachments.depth_stencil = framebuffer._get_depth()._get_att_view();
     } else {
         pass.swapchain = sglue_swapchain();
     }
-    pass.action.colors[0].load_action = SG_LOADACTION_CLEAR;
-    pass.action.colors[0].clear_value = {0.005f, 0.1f, 0.2f, 1.0f};
+    pass.action.colors[0].load_action =
+        pass_opt.loadopt == LoadOpt::CLEAR ? SG_LOADACTION_CLEAR : SG_LOADACTION_LOAD;
+    pass.action.colors[0].clear_value = {pass_opt.clear_color.r, pass_opt.clear_color.g,
+                                         pass_opt.clear_color.b, pass_opt.clear_color.a};
 
     _render_state.in_pass = true;
     sg_begin_pass(pass);

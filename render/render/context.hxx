@@ -47,7 +47,18 @@ enum class PassError {
 
 Option<PresentError> present();
 
-Option<PassError> pass(Fn<void> cmd, OptionRef<Framebuffer> framebuffer = {});
+enum class LoadOpt {
+    LOAD,
+    CLEAR,
+};
+
+struct PassOpt {
+    LoadOpt loadopt = LoadOpt::CLEAR;
+    Vec4 clear_color = {0.05f, 0.1f, 0.2f, 1.0f};
+    OptionRef<Framebuffer> framebuffer = {};
+};
+
+Option<PassError> pass(Fn<void> cmd, PassOpt pass_opt = {});
 } // namespace render
 
 #endif
