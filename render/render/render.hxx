@@ -10,5 +10,7 @@
 #include "context.hxx"
 #include "framebuffer.hxx"
 #include "image.hxx"
+#include "mesh.hxx"
+#include "pipeline.hxx"
 
 #endif

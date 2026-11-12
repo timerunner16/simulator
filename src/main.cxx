@@ -15,12 +15,18 @@
 
 #include <render/render.hxx>
 
+#include "test.h"
+
 using namespace core;
 
 // Holder of graphics state objects
 struct GfxState {
-    Option<render::Framebuffer> framebuffer;
-} gfx;
+    render::Framebuffer framebuffer;
+    render::Mesh mesh;
+    render::Pipeline pipeline;
+};
+
+static Option<GfxState> gfx = {};
 
 // Holder of Lua + console state
 struct lua_state_t {
@@ -110,11 +116,19 @@ static void show_console() {
 }
 
 static void init(void) {
-    if (core::Option<render::InitError> error = render::init()) {
-        std::println("[RENDER] Init Error: {}", (core::usize)error.value());
+    if (Option<render::InitError> error = render::init()) {
+        std::println("[RENDER] Init Error: {}", (usize)error.value());
         sapp_quit();
         return;
     }
+
+    const sg_shader_desc *desc = test_shader_desc(sg_query_backend());
+
+    gfx = std::move(GfxState{
+        .framebuffer = std::move(*render::Framebuffer::create({sapp_widthf(), sapp_heightf()})),
+        .mesh = std::move(*render::Mesh::create_quad()),
+        .pipeline = std::move(*render::Pipeline::create_from_shaderdesc(*desc)),
+    });
 
     simgui_desc_t imgui_desc{};
     imgui_desc.logger.func = slog_func;
@@ -143,20 +157,28 @@ static void frame(void) {
 
     show_console();
 
-    render::pass([]() { simgui_render(); });
+    render::pass([]() {
+        sg_apply_pipeline(gfx->pipeline._get_pipeline());
+        sg_apply_bindings(gfx->mesh.get_bindings());
+
+        sg_draw(0, 6, 1);
+
+        simgui_render();
+    });
 
     render::present();
 }
 
 static void cleanup(void) {
-    if (core::Option<render::CleanupError> error = render::cleanup()) {
-        std::println("[RENDER] Cleanup Error: {}", (core::usize)error.value());
+    simgui_shutdown();
+
+    gfx = {};
+
+    if (Option<render::CleanupError> error = render::cleanup()) {
+        std::println("[RENDER] Cleanup Error: {}", (usize)error.value());
         sapp_quit();
         return;
     }
-
-    simgui_shutdown();
-    sg_shutdown();
 }
 
 static void event(const sapp_event *event) {

@@ -4,8 +4,8 @@
  *  smart pointer types
  */
 
-#ifndef simulator_core_type_monad_hxx
-#define simulator_core_type_monad_hxx
+#ifndef simulator_core_type_memory_hxx
+#define simulator_core_type_memory_hxx
 
 #include <memory>
 

@@ -22,7 +22,7 @@ class Framebuffer {
     Vec2 m_dims;
 
     explicit Framebuffer(Image color, Image depth, const Vec2 &dims)
-        : m_color(color), m_depth(depth), m_dims(dims) {};
+        : m_color(std::move(color)), m_depth(std::move(depth)), m_dims(dims) {};
 
   public:
     static Option<Framebuffer> create(const Vec2 &dims) {
@@ -32,14 +32,14 @@ class Framebuffer {
         auto color_opt = Image::create_empty_color(dims);
         if (!color_opt.has_value())
             return {};
-        Image color = color_opt.value();
+        Image color = std::move(*color_opt);
 
         auto depth_opt = Image::create_empty_depth(dims);
         if (!depth_opt.has_value())
             return {};
-        Image depth = depth_opt.value();
+        Image depth = std::move(*depth_opt);
 
-        return Framebuffer(color, depth, dims);
+        return Framebuffer(std::move(color), std::move(depth), dims);
     }
 
     Vec2 get_size() {
