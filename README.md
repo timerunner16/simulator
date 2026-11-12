@@ -4,8 +4,8 @@ It's a robot simulator. There's robots! (once we make them.)
 ## Development
 
 This codebase is developed in modern C++ (as reasonable), using the C++23
-standard. The primary target is Web via Emscripten, and tooling isn't currently
-provided for building native apps.
+standard. The primary target is Web via Emscripten. Builds also should work on
+Linux (at least Arch); other platforms are untested.
 
 ## Project Structure
 
@@ -20,10 +20,9 @@ everything together with an entrypoint.
 ```
 CORE:
 Core <core/core.hxx>
-- core types
-  - containers
-  - typedefs e.g. u64, i16, f32
-  - geometry e.g. vec3, mat4
+- container types e.g. Option, Result
+- size types e.g. u64, i16, f32
+- geometry types e.g. vec3, mat4
 - globally useful utilities
 
 LOW LEVEL:

@@ -3,7 +3,7 @@ project(simulator)
 
 set(CMAKE_CXX_STANDARD 23)
 
-# EXTERNAL LIBS
+# VENDORED LIBS
 add_library(imgui STATIC
 	imgui/imgui.cpp
 	imgui/imgui_demo.cpp
@@ -18,16 +18,37 @@ add_library(sokol STATIC
 	sokol/sokol_gfx.h
 	sokol/sokol_glue.h
 	sokol/sokol_log.h)
-target_link_libraries(sokol PRIVATE GL dl m)
+if(LINUX)
+	set(THREADS_PREFER_PTHREAD_FLAG ON)
+	find_package(Threads REQUIRED)
+	find_package(Vulkan REQUIRED)
+	find_package(X11 REQUIRED)
+	target_link_libraries(sokol INTERFACE
+		X11::X11
+		X11::Xi
+		X11::Xcursor
+		Vulkan::Vulkan
+		dl
+		m)
+	target_link_libraries(sokol PUBLIC Threads::Threads)
+endif()
 target_include_directories(sokol INTERFACE sokol)
-
 target_link_libraries(sokol PUBLIC imgui)
+if (EMSCRIPTEN)
+	target_link_options(sokol PRIVATE
+		-sMAX_WEBGL_VERSION=2
+		-sMIN_WEBGL_VERSION=2
+	)
+endif()
 
 add_subdirectory(lua)
 
-set(SOL2_LUA_VERSION "5.4.8")
-set(SOL2_BUILD_LUA FALSE)
-add_subdirectory(sol2)
+add_library(sol2 INTERFACE)
+target_include_directories(sol2 BEFORE INTERFACE
+	${CMAKE_CURRENT_SOURCE_DIR}/sol2/include)
+target_link_libraries(sol2 INTERFACE lua)
+add_library(sol2::sol2 ALIAS sol2)
+target_compile_definitions(sol2 INTERFACE SOL_USING_CXX_LUA=0)
 
 # ENGINE LIBS
 add_library(core STATIC
@@ -69,21 +90,34 @@ target_include_directories(resources INTERFACE resources)
 add_executable(simulator
 	src/main.cxx)
 
-target_link_libraries(simulator PRIVATE sokol)
-target_link_libraries(simulator PRIVATE lua)
-target_link_libraries(simulator PRIVATE sol2::sol2)
+target_link_libraries(simulator PRIVATE
+	sokol
+	lua
+	sol2::sol2
+	core
+	render
+	input
+	fileaccess
+	audio
+	entity
+	resources)
 
-target_link_libraries(simulator PRIVATE core)
-target_link_libraries(simulator PRIVATE render)
-target_link_libraries(simulator PRIVATE input)
-target_link_libraries(simulator PRIVATE fileaccess)
-target_link_libraries(simulator PRIVATE audio)
-target_link_libraries(simulator PRIVATE entity)
-target_link_libraries(simulator PRIVATE resources)
+if(EMSCRIPTEN)
+	set_target_properties(simulator PROPERTIES
+		OUTPUT_NAME "index"
+		SUFFIX ".html"
+	)
+	target_link_options(simulator PRIVATE
+		--shell-file ${PROJECT_SOURCE_DIR}/web/index.html)
+	target_link_options(simulator PRIVATE
+		-sMAX_WEBGL_VERSION=2
+		-sMIN_WEBGL_VERSION=2
+	)
+	target_link_options(simulator PRIVATE
+		-sMALLOC=emmalloc --closure=1)
+endif()
 
-set_target_properties(simulator PROPERTIES
-	OUTPUT_NAME "index"
-	SUFFIX ".html"
-)
-target_link_options(simulator PRIVATE --shell-file ../web/index.html)
-target_link_options(simulator PRIVATE -sUSE_WEBGL2=1)
+if (CMAKE_C_COMPILER_ID MATCHES "Clang" AND
+		NOT EMSCRIPTEN)
+	target_link_options(simulator PRIVATE LINKER:-dead_strip)
+endif()
