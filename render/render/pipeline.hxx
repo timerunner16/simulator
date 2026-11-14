@@ -7,7 +7,13 @@
 #ifndef simulator_render_pipeline_hxx
 #define simulator_render_pipeline_hxx
 
+#include <array>
 #include <core/core.hxx>
+#include <cstring>
+#include <map>
+
+#include <string>
+#include <string_view>
 
 #include "sokol_gfx.h"
 
@@ -16,27 +22,173 @@
 namespace render {
 using namespace core;
 
+namespace util {
+template <typename T> struct sg_uniform_type_from {
+    static constexpr sg_uniform_type value = SG_UNIFORMTYPE_INVALID;
+};
+
+template <> struct sg_uniform_type_from<i32> {
+    static constexpr sg_uniform_type value = SG_UNIFORMTYPE_INT;
+};
+
+template <> struct sg_uniform_type_from<f32> {
+    static constexpr sg_uniform_type value = SG_UNIFORMTYPE_FLOAT;
+};
+
+template <> struct sg_uniform_type_from<Vec2> {
+    static constexpr sg_uniform_type value = SG_UNIFORMTYPE_FLOAT2;
+};
+
+template <> struct sg_uniform_type_from<Vec3> {
+    static constexpr sg_uniform_type value = SG_UNIFORMTYPE_FLOAT3;
+};
+
+template <> struct sg_uniform_type_from<Vec4> {
+    static constexpr sg_uniform_type value = SG_UNIFORMTYPE_FLOAT4;
+};
+
+template <> struct sg_uniform_type_from<Mat4> {
+    static constexpr sg_uniform_type value = SG_UNIFORMTYPE_MAT4;
+};
+
+template <typename T>
+static constexpr sg_uniform_type sg_uniform_type_from_v = sg_uniform_type_from<T>::value;
+
+template <typename T>
+static constexpr bool is_uniform_type_v = sg_uniform_type_from_v<T> != SG_UNIFORMTYPE_INVALID;
+} // namespace util
+
+using _ubSlotFn = Fn<int, const char *>;
+using _ubSizeFn = Fn<size_t, const char *>;
+using _uOffsetFn = Fn<int, const char *, const char *>;
+using _uGlslFn = Fn<sg_glsl_shader_uniform, const char *, const char *>;
+
+class _ProgramUniforms {
+  private:
+    struct _uDesc {
+        i32 offset;
+        sg_uniform_type type;
+    };
+
+    struct _ubDesc {
+        i32 slot;
+        usize size;
+        std::map<std::string_view, _uDesc> offset_map;
+    };
+
+    std::map<std::string_view, _ubDesc> m_ub_map;
+
+    _ubSlotFn m_ub_slot_fn;
+    _ubSizeFn m_ub_size_fn;
+    _uOffsetFn m_u_offset_fn;
+    _uGlslFn m_u_glsl_fn;
+
+    std::array<Unique<u8[]>, 8> m_ub_data;
+
+    bool map_uniform_block(std::string_view ub_name) {
+        std::string ub_name_nt(ub_name);
+
+        i32 slot = m_ub_slot_fn(ub_name_nt.c_str());
+        usize size = m_ub_size_fn(ub_name_nt.c_str());
+        if (slot == -1 || size == 0)
+            return false;
+
+        m_ub_map[ub_name] = _ubDesc{.slot = slot, .size = size};
+
+        m_ub_data[slot] = std::make_unique<u8[]>(size);
+
+        return true;
+    }
+
+    bool map_uniform(_ubDesc &ub_desc, std::string_view ub_name, std::string_view u_name) {
+        std::string ub_name_nt(ub_name);
+        std::string u_name_nt(u_name);
+
+        i32 slot = m_ub_slot_fn(ub_name_nt.c_str());
+        usize size = m_ub_size_fn(ub_name_nt.c_str());
+        i32 offset = m_u_offset_fn(ub_name_nt.c_str(), u_name_nt.c_str());
+        sg_glsl_shader_uniform uniform = m_u_glsl_fn(ub_name_nt.c_str(), u_name_nt.c_str());
+
+        if (slot == -1 || size == 0 || offset == -1)
+            return false;
+        ub_desc.offset_map[u_name] = _uDesc{
+            .offset = offset,
+            .type = uniform.type,
+        };
+
+        return true;
+    }
+
+  public:
+    explicit _ProgramUniforms(_ubSlotFn ub_slot_fn, _ubSizeFn ub_size_fn, _uOffsetFn u_offset_fn,
+                              _uGlslFn u_glsl_fn)
+        : m_ub_slot_fn(ub_slot_fn), m_ub_size_fn(ub_size_fn), m_u_offset_fn(u_offset_fn),
+          m_u_glsl_fn(u_glsl_fn) {}
+
+    template <typename T, typename = std::enable_if<util::is_uniform_type_v<T>>>
+    void set_uniform(T data, std::string_view ub_name, std::string_view u_name) {
+        if (!m_ub_map.contains(ub_name))
+            if (!map_uniform_block(ub_name))
+                return;
+
+        _ubDesc &ub_desc = m_ub_map[ub_name];
+
+        if (!ub_desc.offset_map.contains(u_name))
+            if (!map_uniform(ub_desc, ub_name, u_name))
+                return;
+
+        _uDesc &u_desc = ub_desc.offset_map[u_name];
+
+        if (util::sg_uniform_type_from_v<T> != u_desc.type)
+            return;
+
+        // - convert data to bytes,
+        // - copy bytes into uniform block at offset
+        // no type punning --> no UB :]
+        auto data_bytes = std::bit_cast<std::array<u8, sizeof(T)>>(data);
+        auto &ub = m_ub_data[ub_desc.slot];
+        std::memcpy(ub.get() + u_desc.offset, &data_bytes, sizeof(T));
+    }
+
+    void apply_uniforms() {
+        for (auto &[_, ub] : m_ub_map) {
+            sg_range range = sg_range{.ptr = m_ub_data[ub.slot].get(), .size = ub.size};
+            sg_apply_uniforms(ub.slot, range);
+        }
+    }
+};
+
 class Pipeline {
   private:
     sg_pipeline m_pipeline;
 
-    explicit Pipeline(sg_pipeline pipeline) : m_pipeline(pipeline) {}
+    _ProgramUniforms m_program_uniforms;
+
+    explicit Pipeline(sg_pipeline pipeline, _ProgramUniforms program_uniforms)
+        : m_pipeline(pipeline), m_program_uniforms(std::move(program_uniforms)) {}
 
   public:
     Pipeline(const Pipeline &other) = delete;
     Pipeline &operator=(const Pipeline &other) = delete;
 
-    Pipeline(Pipeline &&other) : m_pipeline(other.m_pipeline) {
+    Pipeline(Pipeline &&other)
+        : m_pipeline(other.m_pipeline), m_program_uniforms(std::move(other.m_program_uniforms)) {
         other.m_pipeline = {};
     }
 
     Pipeline &operator=(Pipeline &&other) {
         m_pipeline = other.m_pipeline;
+        m_program_uniforms = std::move(other.m_program_uniforms);
         other.m_pipeline = {};
         return *this;
     }
 
-    static Option<Pipeline> create_from_shaderdesc(const sg_shader_desc &shader_desc) {
+    static Option<Pipeline> create(_ubSlotFn ub_slot_fn, _ubSizeFn ub_size_fn,
+                                   _uOffsetFn u_offset_fn, _uGlslFn u_glsl_fn,
+                                   const sg_shader_desc *shader_desc) {
+        if (!shader_desc)
+            return {};
+
         const sg_shader shader = sg_make_shader(shader_desc);
         if (sg_query_shader_state(shader) != SG_RESOURCESTATE_VALID)
             return {};
@@ -49,13 +201,33 @@ class Pipeline {
         if (sg_query_pipeline_state(pipeline) != SG_RESOURCESTATE_VALID)
             return {};
 
-        return Pipeline(pipeline);
+        _ProgramUniforms program_uniforms(ub_slot_fn, ub_size_fn, u_offset_fn, u_glsl_fn);
+
+        return Pipeline(pipeline, std::move(program_uniforms));
     }
 
-    const sg_pipeline _get_pipeline() {
-        return m_pipeline;
+    template <typename T, typename = std::enable_if<util::is_uniform_type_v<T>>>
+    void set_uniform(T data, std::string_view ub_name, std::string_view u_name) {
+        m_program_uniforms.set_uniform<T>(data, ub_name, u_name);
+    }
+
+    void apply_uniforms() {
+        m_program_uniforms.apply_uniforms();
+    }
+
+    void apply_pipeline() {
+        sg_apply_pipeline(m_pipeline);
     }
 };
+
+#define PIPELINE_CREATE_ARGS(mod, prog, backend)                                                   \
+    mod##_##prog##_uniformblock_slot, mod##_##prog##_uniformblock_size,                            \
+        mod##_##prog##_uniform_offset, mod##_##prog##_uniform_desc,                                \
+        mod##_##prog##_shader_desc((backend))
+
+#define PIPELINE_CREATE_ARGS_NOMOD(prog, backend)                                                  \
+    prog##_uniformblock_slot, prog##_uniformblock_size, prog##_uniform_offset,                     \
+        prog##_uniform_desc, &prog##_shader_desc((backend))
 } // namespace render
 
 #endif

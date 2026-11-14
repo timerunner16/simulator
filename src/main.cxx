@@ -122,12 +122,11 @@ static void init(void) {
         return;
     }
 
-    const sg_shader_desc *desc = test_shader_desc(sg_query_backend());
-
     gfx = std::move(GfxState{
         .framebuffer = std::move(*render::Framebuffer::create({sapp_widthf(), sapp_heightf()})),
         .mesh = std::move(*render::Mesh::create_quad()),
-        .pipeline = std::move(*render::Pipeline::create_from_shaderdesc(*desc)),
+        .pipeline = std::move(
+            *render::Pipeline::create(PIPELINE_CREATE_ARGS(testmod, test, sg_query_backend()))),
     });
 
     simgui_desc_t imgui_desc{};
@@ -157,9 +156,16 @@ static void frame(void) {
 
     show_console();
 
-    render::pass([]() {
-        sg_apply_pipeline(gfx->pipeline._get_pipeline());
+    render::pass([=]() {
+        gfx->pipeline.apply_pipeline();
         sg_apply_bindings(gfx->mesh.get_bindings());
+
+        f32 t = sapp_frame_count() / 120.0f;
+        Mat4 mvp = Mat4(Mat3(sinf(t)));
+        Vec4 color = Vec4(Vec3(sinf(t * 1.57)) * 0.5f + Vec3(0.5), 0.f);
+        gfx->pipeline.set_uniform(mvp, "vs_params", "mvp");
+        gfx->pipeline.set_uniform(color, "fs_params", "color_mod");
+        gfx->pipeline.apply_uniforms();
 
         sg_draw(0, 6, 1);
 
@@ -183,6 +189,12 @@ static void cleanup(void) {
 
 static void event(const sapp_event *event) {
     simgui_handle_event(event);
+    if (event->type == SAPP_EVENTTYPE_KEY_DOWN) {
+        if (event->modifiers & SAPP_MODIFIER_ALT && event->key_code == SAPP_KEYCODE_ENTER)
+            sapp_toggle_fullscreen();
+        if (event->modifiers & SAPP_MODIFIER_ALT && event->key_code == SAPP_KEYCODE_Q)
+            sapp_request_quit();
+    }
 }
 
 sapp_desc sokol_main(int argc, char **argv) {

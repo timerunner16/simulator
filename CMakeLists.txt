@@ -110,22 +110,37 @@ target_link_libraries(simulator PRIVATE
 	entity
 	resources)
 
-set(shadergen_src ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders)
-set(shadergen_out ${CMAKE_CURRENT_BINARY_DIR}/shaders_generated)
+# SHADERGEN (sokol-shdc)
+set(shadergen_sources
+	${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/test.glsl)
+
 set(shadergen_langs glsl300es:spirv_vk)
-add_custom_command(
-	OUTPUT ${shadergen_out}/test.h
-	COMMAND
-		sokol-shdc
-		-i ${shadergen_src}/test.glsl
-		-o ${shadergen_out}/test.h
-		-l ${shadergen_langs}
-	DEPENDS ${shadergen_src}/test.glsl
-	VERBATIM)
+set(shadergen_out "")
+foreach(input IN LISTS shadergen_sources)
+	cmake_path(RELATIVE_PATH input
+		BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders
+		OUTPUT_VARIABLE input_relative)
+	cmake_path(REPLACE_EXTENSION
+		input_relative h
+		OUTPUT_VARIABLE output_relative)
+	set(output ${CMAKE_CURRENT_BINARY_DIR}/shaders_generated/${output_relative})
+	add_custom_command(
+		OUTPUT ${output}
+		COMMAND
+			sokol-shdc
+			-i ${input}
+			-o ${output}
+			-l ${shadergen_langs}
+			-r
+		DEPENDS ${input}
+		VERBATIM)
+	list(APPEND shadergen_out ${output})
+endforeach()
 
 add_library(shadergen INTERFACE)
-target_sources(shadergen INTERFACE ${shadergen_out}/test.h)
-target_include_directories(shadergen INTERFACE ${shadergen_out})
+target_sources(shadergen INTERFACE ${shadergen_out})
+target_include_directories(shadergen INTERFACE
+	${CMAKE_CURRENT_BINARY_DIR}/shaders_generated)
 
 target_link_libraries(simulator PRIVATE shadergen)
 
