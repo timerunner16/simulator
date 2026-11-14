@@ -111,8 +111,10 @@ target_link_libraries(simulator PRIVATE
 	resources)
 
 # SHADERGEN (sokol-shdc)
+set(shader_src ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders)
 set(shadergen_sources
-	${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/test.glsl)
+	${shader_src}/test.glsl
+	${shader_src}/color.glsl)
 
 set(shadergen_langs glsl300es:spirv_vk)
 set(shadergen_out "")

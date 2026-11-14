@@ -60,12 +60,13 @@ class Mesh {
         sg_destroy_buffer(m_index_buffer);
     }
 
-    static Option<Mesh> create_quad() {
+    static Option<Mesh> create_quad(Vec3 p, Vec2 s, bool colored) {
+        f32 nc = colored ? 0.0f : 1.0f;
         const Vertex vertices[] = {
-            Vertex{{-.5f, -.5f, 0.f}, {0.f, 0.f, -1.f}, {1.f, 0.f, 0.f, 1.f}, {0.f, 0.f}},
-            Vertex{ {-.5f, .5f, 0.f}, {0.f, 0.f, -1.f}, {0.f, 1.f, 0.f, 1.f}, {0.f, 1.f}},
-            Vertex{ {.5f, -.5f, 0.f}, {0.f, 0.f, -1.f}, {0.f, 0.f, 1.f, 1.f}, {1.f, 0.f}},
-            Vertex{  {.5f, .5f, 0.f}, {0.f, 0.f, -1.f}, {1.f, 1.f, 0.f, 1.f}, {1.f, 1.f}},
+            Vertex{                    p, {0, 0, -1},  {1.f, nc, nc, 1.f}, {0.f, 0.f}},
+            Vertex{  p + Vec3{0, s.y, 0}, {0, 0, -1},  {nc, 1.f, nc, 1.f}, {0.f, 1.f}},
+            Vertex{  p + Vec3{s.x, 0, 0}, {0, 0, -1},  {nc, nc, 1.f, 1.f}, {1.f, 0.f}},
+            Vertex{p + Vec3{s.x, s.y, 0}, {0, 0, -1}, {1.f, 1.f, nc, 1.f}, {1.f, 1.f}},
         };
 
         const u32 indices[] = {
@@ -97,13 +98,6 @@ class Mesh {
 
     const sg_buffer _get_index_buffer() const {
         return m_index_buffer;
-    }
-
-    const sg_bindings get_bindings() const {
-        sg_bindings bindings = {};
-        bindings.vertex_buffers[0] = m_vertex_buffer;
-        bindings.index_buffer = m_index_buffer;
-        return bindings;
     }
 };
 } // namespace render

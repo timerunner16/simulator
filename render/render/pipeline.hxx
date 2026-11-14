@@ -17,7 +17,9 @@
 
 #include "sokol_gfx.h"
 
+#include "image.hxx"
 #include "mesh.hxx"
+#include "sampler.hxx"
 
 namespace render {
 using namespace core;
@@ -62,6 +64,8 @@ using _ubSlotFn = Fn<int, const char *>;
 using _ubSizeFn = Fn<size_t, const char *>;
 using _uOffsetFn = Fn<int, const char *, const char *>;
 using _uGlslFn = Fn<sg_glsl_shader_uniform, const char *, const char *>;
+using _texSlotFn = Fn<int, const char *>;
+using _smpSlotFn = Fn<int, const char *>;
 
 class _ProgramUniforms {
   private:
@@ -78,10 +82,25 @@ class _ProgramUniforms {
 
     std::map<std::string_view, _ubDesc> m_ub_map;
 
+    struct _texDesc {
+        i32 slot;
+    };
+
+    struct _smpDesc {
+        i32 slot;
+    };
+
+    std::map<std::string_view, _texDesc> m_tex_map;
+    std::map<std::string_view, _smpDesc> m_smp_map;
+    std::array<OptionRef<const Image>, 8> m_tex_refs;
+    std::array<OptionRef<const Sampler>, 8> m_smp_refs;
+
     _ubSlotFn m_ub_slot_fn;
     _ubSizeFn m_ub_size_fn;
     _uOffsetFn m_u_offset_fn;
     _uGlslFn m_u_glsl_fn;
+    _texSlotFn m_tex_slot_fn;
+    _smpSlotFn m_smp_slot_fn;
 
     std::array<Unique<u8[]>, 8> m_ub_data;
 
@@ -119,11 +138,37 @@ class _ProgramUniforms {
         return true;
     }
 
+    bool map_texture(std::string_view tex_name) {
+        std::string tex_name_nt(tex_name);
+
+        i32 slot = m_tex_slot_fn(tex_name_nt.c_str());
+
+        if (slot == -1)
+            return false;
+
+        m_tex_map[tex_name] = _texDesc{.slot = slot};
+
+        return true;
+    }
+
+    bool map_sampler(std::string_view smp_name) {
+        std::string smp_name_nt(smp_name);
+
+        i32 slot = m_smp_slot_fn(smp_name_nt.c_str());
+
+        if (slot == -1)
+            return false;
+
+        m_smp_map[smp_name] = _smpDesc{.slot = slot};
+
+        return true;
+    }
+
   public:
     explicit _ProgramUniforms(_ubSlotFn ub_slot_fn, _ubSizeFn ub_size_fn, _uOffsetFn u_offset_fn,
-                              _uGlslFn u_glsl_fn)
+                              _uGlslFn u_glsl_fn, _texSlotFn tex_slot_fn, _smpSlotFn smp_slot_fn)
         : m_ub_slot_fn(ub_slot_fn), m_ub_size_fn(ub_size_fn), m_u_offset_fn(u_offset_fn),
-          m_u_glsl_fn(u_glsl_fn) {}
+          m_u_glsl_fn(u_glsl_fn), m_tex_slot_fn(tex_slot_fn), m_smp_slot_fn(smp_slot_fn) {}
 
     template <typename T, typename = std::enable_if<util::is_uniform_type_v<T>>>
     void set_uniform(T data, std::string_view ub_name, std::string_view u_name) {
@@ -150,12 +195,53 @@ class _ProgramUniforms {
         std::memcpy(ub.get() + u_desc.offset, &data_bytes, sizeof(T));
     }
 
+    void set_texture(const Image &image, std::string_view tex_name) {
+        if (!m_tex_map.contains(tex_name))
+            if (!map_texture(tex_name))
+                return;
+
+        _texDesc &tex_desc = m_tex_map[tex_name];
+
+        m_tex_refs[tex_desc.slot] = image;
+    }
+
+    void set_sampler(const Sampler &sampler, std::string_view smp_name) {
+        if (!m_smp_map.contains(smp_name))
+            if (!map_sampler(smp_name))
+                return;
+
+        _smpDesc &smp_desc = m_smp_map[smp_name];
+
+        m_smp_refs[smp_desc.slot] = sampler;
+    }
+
     void apply_uniforms() {
         for (auto &[_, ub] : m_ub_map) {
             sg_range range = sg_range{.ptr = m_ub_data[ub.slot].get(), .size = ub.size};
             sg_apply_uniforms(ub.slot, range);
         }
     }
+
+    sg_bindings get_texsmp_bindings() {
+        sg_bindings bindings = {};
+        for (auto &[_, tex] : m_tex_map) {
+            if (m_tex_refs[tex.slot].has_value()) {
+                const sg_view &view = m_tex_refs[tex.slot]->get()._get_tex_view();
+                bindings.views[tex.slot] = view;
+            } else {
+                bindings.views[tex.slot] = {};
+            }
+        }
+        for (auto &[_, smp] : m_smp_map) {
+            if (m_smp_refs[smp.slot].has_value()) {
+                const sg_sampler &sampler = m_smp_refs[smp.slot]->get()._get_sampler();
+                bindings.samplers[smp.slot] = sampler;
+            } else {
+                bindings.samplers[smp.slot] = {};
+            }
+        }
+        return bindings;
+    };
 };
 
 class Pipeline {
@@ -185,6 +271,7 @@ class Pipeline {
 
     static Option<Pipeline> create(_ubSlotFn ub_slot_fn, _ubSizeFn ub_size_fn,
                                    _uOffsetFn u_offset_fn, _uGlslFn u_glsl_fn,
+                                   _texSlotFn tex_slot_fn, _smpSlotFn smp_slot_fn,
                                    const sg_shader_desc *shader_desc) {
         if (!shader_desc)
             return {};
@@ -201,7 +288,8 @@ class Pipeline {
         if (sg_query_pipeline_state(pipeline) != SG_RESOURCESTATE_VALID)
             return {};
 
-        _ProgramUniforms program_uniforms(ub_slot_fn, ub_size_fn, u_offset_fn, u_glsl_fn);
+        _ProgramUniforms program_uniforms(ub_slot_fn, ub_size_fn, u_offset_fn, u_glsl_fn,
+                                          tex_slot_fn, smp_slot_fn);
 
         return Pipeline(pipeline, std::move(program_uniforms));
     }
@@ -211,8 +299,20 @@ class Pipeline {
         m_program_uniforms.set_uniform<T>(data, ub_name, u_name);
     }
 
+    void set_texture(const Image &image, std::string_view tex_name) {
+        m_program_uniforms.set_texture(image, tex_name);
+    }
+
+    void set_sampler(const Sampler &sampler, std::string_view smp_name) {
+        m_program_uniforms.set_sampler(sampler, smp_name);
+    }
+
     void apply_uniforms() {
         m_program_uniforms.apply_uniforms();
+    }
+
+    sg_bindings _get_texsmp_bindings() {
+        return m_program_uniforms.get_texsmp_bindings();
     }
 
     void apply_pipeline() {
@@ -222,12 +322,13 @@ class Pipeline {
 
 #define PIPELINE_CREATE_ARGS(mod, prog, backend)                                                   \
     mod##_##prog##_uniformblock_slot, mod##_##prog##_uniformblock_size,                            \
-        mod##_##prog##_uniform_offset, mod##_##prog##_uniform_desc,                                \
-        mod##_##prog##_shader_desc((backend))
+        mod##_##prog##_uniform_offset, mod##_##prog##_uniform_desc, mod##_##prog##_texture_slot,   \
+        mod##_##prog##_sampler_slot, mod##_##prog##_shader_desc((backend))
 
 #define PIPELINE_CREATE_ARGS_NOMOD(prog, backend)                                                  \
     prog##_uniformblock_slot, prog##_uniformblock_size, prog##_uniform_offset,                     \
-        prog##_uniform_desc, &prog##_shader_desc((backend))
+        prog##_uniform_desc, prog##_texture_slot, prog##_sampler_slot,                             \
+        &prog##_shader_desc((backend))
 } // namespace render
 
 #endif

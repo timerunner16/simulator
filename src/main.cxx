@@ -15,6 +15,7 @@
 
 #include <render/render.hxx>
 
+#include "color.h"
 #include "test.h"
 
 using namespace core;
@@ -22,8 +23,12 @@ using namespace core;
 // Holder of graphics state objects
 struct GfxState {
     render::Framebuffer framebuffer;
-    render::Mesh mesh;
-    render::Pipeline pipeline;
+    render::Mesh color_mesh;
+    render::Mesh white_mesh;
+    render::Pipeline tex_pipeline;
+    render::Pipeline color_pipeline;
+    render::Image image;
+    render::Sampler sampler;
 };
 
 static Option<GfxState> gfx = {};
@@ -123,10 +128,17 @@ static void init(void) {
     }
 
     gfx = std::move(GfxState{
-        .framebuffer = std::move(*render::Framebuffer::create({sapp_widthf(), sapp_heightf()})),
-        .mesh = std::move(*render::Mesh::create_quad()),
-        .pipeline = std::move(
-            *render::Pipeline::create(PIPELINE_CREATE_ARGS(testmod, test, sg_query_backend()))),
+        .framebuffer = *render::Framebuffer::create({sapp_widthf(), sapp_heightf()}),
+        .color_mesh = *render::Mesh::create_quad(Vec3(-0.5f, -0.5f, 0), Vec2(1.f), true),
+        .white_mesh = *render::Mesh::create_quad(Vec3(-0.5f, -0.5f, 0), Vec2(1.f), false),
+        .tex_pipeline =
+            *render::Pipeline::create(PIPELINE_CREATE_ARGS(test, test, sg_query_backend())),
+        .color_pipeline =
+            *render::Pipeline::create(PIPELINE_CREATE_ARGS(color, color, sg_query_backend())),
+        .image = *render::Image::create_xor(),
+        .sampler =
+            *render::Sampler::create(render::Sampler::Filter::LINEAR,
+                                     render::Sampler::Border::BLACK, render::Sampler::Wrap::CLAMP),
     });
 
     simgui_desc_t imgui_desc{};
@@ -156,16 +168,35 @@ static void frame(void) {
 
     show_console();
 
-    render::pass([=]() {
-        gfx->pipeline.apply_pipeline();
-        sg_apply_bindings(gfx->mesh.get_bindings());
+    f32 t = sapp_frame_count() / 120.0f;
+    f32 st = sinf(t);
+    f32 ct = cosf(t);
+    Mat2 ar = Mat2(sapp_heightf() / sapp_widthf(), 0, 0, 1);
 
-        f32 t = sapp_frame_count() / 120.0f;
-        Mat4 mvp = Mat4(Mat3(sinf(t)));
-        Vec4 color = Vec4(Vec3(sinf(t * 1.57)) * 0.5f + Vec3(0.5), 0.f);
-        gfx->pipeline.set_uniform(mvp, "vs_params", "mvp");
-        gfx->pipeline.set_uniform(color, "fs_params", "color_mod");
-        gfx->pipeline.apply_uniforms();
+    render::pass([=]() {
+        gfx->color_pipeline.apply_pipeline();
+        Mat4 rot_mvp = Mat4(ar * Mat2(ct, st, -st, ct));
+        gfx->color_pipeline.set_uniform(rot_mvp, "vs_params", "mvp");
+        sg_bindings color_bindings = {};
+        color_bindings.vertex_buffers[0] = gfx->color_mesh._get_vertex_buffer();
+        color_bindings.index_buffer = gfx->color_mesh._get_index_buffer();
+
+        sg_apply_bindings(color_bindings);
+        gfx->color_pipeline.apply_uniforms();
+
+        sg_draw(0, 6, 1);
+
+        gfx->tex_pipeline.apply_pipeline();
+        Mat4 scale_mvp = Mat4(ar * Mat2(st));
+        gfx->tex_pipeline.set_texture(gfx->image, "tex0");
+        gfx->tex_pipeline.set_sampler(gfx->sampler, "smp0");
+        gfx->tex_pipeline.set_uniform(scale_mvp, "vs_params", "mvp");
+        sg_bindings tex_bindings = gfx->tex_pipeline._get_texsmp_bindings();
+        tex_bindings.vertex_buffers[0] = gfx->white_mesh._get_vertex_buffer();
+        tex_bindings.index_buffer = gfx->white_mesh._get_index_buffer();
+
+        sg_apply_bindings(tex_bindings);
+        gfx->tex_pipeline.apply_uniforms();
 
         sg_draw(0, 6, 1);
 
