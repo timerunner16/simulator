@@ -32,6 +32,12 @@ if(LINUX)
 		m)
 	target_link_libraries(sokol PUBLIC Threads::Threads)
 endif()
+if(MSVC)
+	find_package(Vulkan REQUIRED)
+	target_link_libraries(sokol PUBLIC
+		Vulkan::Vulkan
+		Vulkan::Headers)
+endif()
 target_include_directories(sokol INTERFACE sokol)
 target_link_libraries(sokol PUBLIC imgui)
 if (EMSCRIPTEN)
