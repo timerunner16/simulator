@@ -174,31 +174,17 @@ static void frame(void) {
     Mat2 ar = Mat2(sapp_heightf() / sapp_widthf(), 0, 0, 1);
 
     render::pass([=]() {
-        gfx->color_pipeline.apply_pipeline();
         Mat4 rot_mvp = Mat4(ar * Mat2(ct, st, -st, ct));
         gfx->color_pipeline.set_uniform(rot_mvp, "vs_params", "mvp");
-        sg_bindings color_bindings = {};
-        color_bindings.vertex_buffers[0] = gfx->color_mesh._get_vertex_buffer();
-        color_bindings.index_buffer = gfx->color_mesh._get_index_buffer();
 
-        sg_apply_bindings(color_bindings);
-        gfx->color_pipeline.apply_uniforms();
+        render::draw(gfx->color_pipeline, gfx->color_mesh);
 
-        sg_draw(0, 6, 1);
-
-        gfx->tex_pipeline.apply_pipeline();
         Mat4 scale_mvp = Mat4(ar * Mat2(st));
         gfx->tex_pipeline.set_texture(gfx->image, "tex0");
         gfx->tex_pipeline.set_sampler(gfx->sampler, "smp0");
         gfx->tex_pipeline.set_uniform(scale_mvp, "vs_params", "mvp");
-        sg_bindings tex_bindings = gfx->tex_pipeline._get_texsmp_bindings();
-        tex_bindings.vertex_buffers[0] = gfx->white_mesh._get_vertex_buffer();
-        tex_bindings.index_buffer = gfx->white_mesh._get_index_buffer();
 
-        sg_apply_bindings(tex_bindings);
-        gfx->tex_pipeline.apply_uniforms();
-
-        sg_draw(0, 6, 1);
+        render::draw(gfx->tex_pipeline, gfx->white_mesh);
 
         simgui_render();
     });
@@ -236,8 +222,8 @@ sapp_desc sokol_main(int argc, char **argv) {
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = event,
-        .width = 800,
-        .height = 600,
+        .width = 1920,
+        .height = 1080,
         .sample_count = 1,
         .high_dpi = true,
         .window_title = "Simulator",

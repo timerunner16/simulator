@@ -5,6 +5,7 @@
  */
 
 #include "render/render.hxx"
+#include "render/context.hxx"
 
 #include <sokol_gfx.h>
 #include <sokol_glue.h>
@@ -81,6 +82,19 @@ Option<PassError> pass(Fn<void> cmd, PassOpt pass_opt) {
     cmd();
     sg_end_pass();
     _render_state.in_pass = false;
+
+    return {};
+}
+
+Option<DrawError> draw(Pipeline &pipeline, Mesh &mesh) {
+    pipeline.apply_pipeline();
+    pipeline.apply_uniforms();
+    auto bindings = pipeline._get_texsmp_bindings();
+    bindings.vertex_buffers[0] = mesh._get_vertex_buffer();
+    bindings.index_buffer = mesh._get_index_buffer();
+    sg_apply_bindings(bindings);
+
+    sg_draw(0, mesh._get_index_count(), 1);
 
     return {};
 }

@@ -34,24 +34,31 @@ class Mesh {
     sg_buffer m_vertex_buffer;
     sg_buffer m_index_buffer;
 
-    explicit Mesh(sg_buffer vertex_buffer, sg_buffer index_buffer)
-        : m_vertex_buffer(vertex_buffer), m_index_buffer(index_buffer) {};
+    usize m_index_count;
+
+    explicit Mesh(sg_buffer vertex_buffer, sg_buffer index_buffer, usize index_count)
+        : m_vertex_buffer(vertex_buffer), m_index_buffer(index_buffer),
+          m_index_count(index_count) {};
 
   public:
     Mesh(const Mesh &other) = delete;
     Mesh &operator=(const Mesh &other) = delete;
 
     Mesh(Mesh &&other)
-        : m_vertex_buffer(other.m_vertex_buffer), m_index_buffer(other.m_index_buffer) {
+        : m_vertex_buffer(other.m_vertex_buffer), m_index_buffer(other.m_index_buffer),
+          m_index_count(other.m_index_count) {
         other.m_vertex_buffer = {};
         other.m_index_buffer = {};
+        other.m_index_count = 0;
     }
 
     Mesh &operator=(Mesh &&other) {
         m_vertex_buffer = other.m_vertex_buffer;
         m_index_buffer = other.m_index_buffer;
+        m_index_count = other.m_index_count;
         other.m_vertex_buffer = {};
         other.m_index_buffer = {};
+        other.m_index_count = 0;
         return *this;
     }
 
@@ -62,19 +69,20 @@ class Mesh {
 
     static Option<Mesh> create_quad(Vec3 p, Vec2 s, bool colored) {
         f32 nc = colored ? 0.0f : 1.0f;
-        const Vertex vertices[] = {
+        std::array<Vertex, 4> vertices = {
             Vertex{                    p, {0, 0, -1},  {1.f, nc, nc, 1.f}, {0.f, 0.f}},
             Vertex{  p + Vec3{0, s.y, 0}, {0, 0, -1},  {nc, 1.f, nc, 1.f}, {0.f, 1.f}},
             Vertex{  p + Vec3{s.x, 0, 0}, {0, 0, -1},  {nc, nc, 1.f, 1.f}, {1.f, 0.f}},
             Vertex{p + Vec3{s.x, s.y, 0}, {0, 0, -1}, {1.f, 1.f, nc, 1.f}, {1.f, 1.f}},
         };
 
-        const u32 indices[] = {
+        std::array<u32, 6> indices = {
             0, 2, 1, 1, 3, 2,
         };
 
         sg_buffer_desc vertex_buffer_desc = {};
-        vertex_buffer_desc.data = SG_RANGE(vertices);
+        vertex_buffer_desc.data =
+            sg_range{.ptr = vertices.data(), .size = sizeof(Vertex) * vertices.size()};
         vertex_buffer_desc.usage.vertex_buffer = true;
 
         const sg_buffer vertex_buffer = sg_make_buffer(vertex_buffer_desc);
@@ -82,14 +90,14 @@ class Mesh {
             return {};
 
         sg_buffer_desc index_buffer_desc = {};
-        index_buffer_desc.data = SG_RANGE(indices);
+        index_buffer_desc.data = sg_range{.ptr = indices.data(), .size = 4 * indices.size()};
         index_buffer_desc.usage.index_buffer = true;
 
         const sg_buffer index_buffer = sg_make_buffer(index_buffer_desc);
         if (sg_query_buffer_state(index_buffer) != SG_RESOURCESTATE_VALID)
             return {};
 
-        return Mesh(vertex_buffer, index_buffer);
+        return Mesh(vertex_buffer, index_buffer, indices.size());
     }
 
     const sg_buffer _get_vertex_buffer() const {
@@ -98,6 +106,10 @@ class Mesh {
 
     const sg_buffer _get_index_buffer() const {
         return m_index_buffer;
+    }
+
+    const usize _get_index_count() const {
+        return m_index_count;
     }
 };
 } // namespace render

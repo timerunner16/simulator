@@ -11,6 +11,8 @@
 #include <core/core.hxx>
 
 #include "framebuffer.hxx"
+#include "mesh.hxx"
+#include "pipeline.hxx"
 
 namespace render {
 using namespace core;
@@ -59,6 +61,12 @@ struct PassOpt {
 };
 
 Option<PassError> pass(Fn<void> cmd, PassOpt pass_opt = {});
+
+enum class DrawError {
+    UNKNOWN_DRAW_ERROR,
+};
+
+Option<DrawError> draw(Pipeline &pipeline, Mesh &mesh);
 } // namespace render
 
 #endif
