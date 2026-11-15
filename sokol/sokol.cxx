@@ -9,6 +9,10 @@
 #endif
 
 // implement all sokol libraries
+#if defined(WIN32)
+#define SOKOL_WIN32_FORCE_MAIN 1
+#endif
+
 #define SOKOL_IMPL
 #include "sokol_app.h"
 #include "sokol_gfx.h"
