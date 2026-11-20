@@ -60,6 +60,120 @@ template <typename T>
 static constexpr bool is_uniform_type_v = sg_uniform_type_from_v<T> != SG_UNIFORMTYPE_INVALID;
 } // namespace util
 
+using _attrSlotEnumFn = Fn<Span<Pair<const char *, int>>>;
+using _texSlotEnumFn = Fn<Span<Pair<const char *, int>>>;
+using _smpSlotEnumFn = Fn<Span<Pair<const char *, int>>>;
+using _ubSlotEnumFn = Fn<Span<Pair<const char *, int>>>;
+using _ubSizeEnumFn = Fn<Span<Pair<const char *, size_t>>>;
+using _uOffsetEnumFn = Fn<Span<Pair<const char *, int>>, const char *>;
+using _uDescEnumFn = Fn<Span<Pair<const char *, sg_glsl_shader_uniform>>, const char *>;
+
+class _ProgramLayout {
+  private:
+    struct _attrDesc {
+        i32 slot;
+    };
+
+    struct _texDesc {
+        i32 slot;
+    };
+
+    struct _smpDesc {
+        i32 slot;
+    };
+
+    struct _uDesc {
+        i32 offset;
+        sg_uniform_type type;
+    };
+
+    struct _ubDesc {
+        i32 slot;
+        size_t size;
+        Map<String, _uDesc> members;
+    };
+
+    Map<String, _attrDesc> m_attr_map;
+    Map<String, _texDesc> m_tex_map;
+    Map<String, _smpDesc> m_smp_map;
+    Map<String, _ubDesc> m_ub_map;
+
+    explicit _ProgramLayout(Map<String, _attrDesc> attr_map, Map<String, _texDesc> tex_map,
+                            Map<String, _smpDesc> smp_map, Map<String, _ubDesc> ub_map)
+        : m_attr_map(attr_map), m_tex_map(tex_map), m_smp_map(smp_map), m_ub_map(ub_map) {}
+
+  public:
+    static Option<_ProgramLayout>
+    create(_attrSlotEnumFn attr_slot_enum_fn, _texSlotEnumFn tex_slot_enum_fn,
+           _smpSlotEnumFn smp_slot_enum_fn, _ubSlotEnumFn ub_slot_enum_fn,
+           _ubSizeEnumFn ub_size_enum_fn, _uOffsetEnumFn u_offset_enum_fn,
+           _uDescEnumFn u_desc_enum_fn) {
+        Map<String, _attrDesc> attr_map;
+        for (auto &[key, val] : attr_slot_enum_fn()) {
+            attr_map[key] = _attrDesc{
+                .slot = val,
+            };
+        }
+        Map<String, _texDesc> tex_map;
+        for (auto &[key, val] : tex_slot_enum_fn()) {
+            tex_map[key] = _texDesc{
+                .slot = val,
+            };
+        }
+        Map<String, _smpDesc> smp_map;
+        for (auto &[key, val] : smp_slot_enum_fn()) {
+            smp_map[key] = _smpDesc{
+                .slot = val,
+            };
+        }
+        Map<String, _ubDesc> ub_map;
+        for (auto &[key, val] : ub_slot_enum_fn()) {
+            ub_map[key] = _ubDesc{
+                .slot = val,
+                .size = UINT64_MAX,
+                .members = {},
+            };
+        }
+        for (auto &[key, val] : ub_size_enum_fn()) {
+            if (!ub_map.contains(key))
+                return {};
+            ub_map[key].size = val;
+        }
+        for (auto &[key, val] : ub_map) {
+            for (auto &[_key, _val] : u_offset_enum_fn(key.c_str())) {
+                val.members[_key] = _uDesc{
+                    .offset = _val,
+                };
+            }
+            for (auto &[_key, _val] : u_desc_enum_fn(key.c_str())) {
+                if (!val.members.contains(_key))
+                    return {};
+                val.members[_key].type = _val.type;
+            }
+            if (val.members.size() == 0)
+                return {};
+        }
+
+        return _ProgramLayout(attr_map, tex_map, smp_map, ub_map);
+    }
+
+    const Map<String, _attrDesc>& get_attr_map() const {
+        return m_attr_map;
+    }
+
+    const Map<String, _texDesc>& get_tex_map() const {
+        return m_tex_map;
+    }
+
+    const Map<String, _smpDesc>& get_smp_map() const {
+        return m_smp_map;
+    }
+
+    const Map<String, _ubDesc>& get_ub_map() const {
+        return m_ub_map;
+    }
+};
+
 using _ubSlotFn = Fn<int, const char *>;
 using _ubSizeFn = Fn<size_t, const char *>;
 using _uOffsetFn = Fn<int, const char *, const char *>;

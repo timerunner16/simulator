@@ -11,6 +11,8 @@
 
 #include <core/core.hxx>
 
+#include <array>
+
 namespace render {
 using namespace core;
 

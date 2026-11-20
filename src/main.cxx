@@ -137,7 +137,7 @@ static void init(void) {
             *render::Pipeline::create(PIPELINE_CREATE_ARGS(color, color, sg_query_backend())),
         .image = *render::Image::create_xor(),
         .sampler =
-            *render::Sampler::create(render::Sampler::Filter::LINEAR,
+            *render::Sampler::create(render::Sampler::Filter::NEAREST,
                                      render::Sampler::Border::BLACK, render::Sampler::Wrap::CLAMP),
     });
 

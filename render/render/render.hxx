@@ -10,7 +10,9 @@
 #include "context.hxx"
 #include "framebuffer.hxx"
 #include "image.hxx"
+#include "sampler.hxx"
 #include "mesh.hxx"
 #include "pipeline.hxx"
+#include "material.hxx"
 
 #endif

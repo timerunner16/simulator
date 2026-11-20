@@ -11,6 +11,9 @@
 
 #include <sokol_gfx.h>
 
+#include <array>
+#include <bit>
+
 namespace render {
 using namespace core;
 
