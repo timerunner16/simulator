@@ -11,6 +11,8 @@
 
 #include <sokol_gfx.h>
 
+#include <bit>
+
 namespace render {
 using namespace core;
 
@@ -94,7 +96,7 @@ class Image {
     }
 
     static Option<Image> create_xor() {
-        std::array<u8, 4 * 256 * 256> data;
+        std::vector<u8> data(4 * 256 * 256);
         for (i32 y = 0; y < 256; y++) {
             for (i32 x = 0; x < 256; x++) {
                 usize id = (y * 256 + x) * 4;

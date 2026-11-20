@@ -11,8 +11,8 @@
 #include <core/core.hxx>
 
 #include "framebuffer.hxx"
+#include "material.hxx"
 #include "mesh.hxx"
-#include "pipeline.hxx"
 
 namespace render {
 using namespace core;
@@ -66,7 +66,7 @@ enum class DrawError {
     UNKNOWN_DRAW_ERROR,
 };
 
-Option<DrawError> draw(Pipeline &pipeline, Mesh &mesh);
+Option<DrawError> draw(Material &material, Mesh &mesh);
 } // namespace render
 
 #endif

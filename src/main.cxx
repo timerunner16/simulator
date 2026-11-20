@@ -25,10 +25,12 @@ struct GfxState {
     render::Framebuffer framebuffer;
     render::Mesh color_mesh;
     render::Mesh white_mesh;
-    render::Pipeline tex_pipeline;
-    render::Pipeline color_pipeline;
-    render::Image image;
-    render::Sampler sampler;
+    Shared<render::Pipeline> tex_pipeline;
+    Shared<render::Pipeline> color_pipeline;
+    render::Material tex_material;
+    render::Material color_material;
+    Shared<render::Image> image;
+    Shared<render::Sampler> sampler;
 };
 
 static Option<GfxState> gfx = {};
@@ -127,19 +129,24 @@ static void init(void) {
         return;
     }
 
-    gfx = std::move(GfxState{
+    auto tex_pipeline = std::make_shared<render::Pipeline>(
+        *render::Pipeline::create(PIPELINE_CREATE_ARGS(test, test, sg_query_backend())));
+    auto color_pipeline = std::make_shared<render::Pipeline>(
+        *render::Pipeline::create(PIPELINE_CREATE_ARGS(color, color, sg_query_backend())));
+    GfxState state = GfxState{
         .framebuffer = *render::Framebuffer::create({sapp_widthf(), sapp_heightf()}),
         .color_mesh = *render::Mesh::create_quad(Vec3(-0.5f, -0.5f, 0), Vec2(1.f), true),
         .white_mesh = *render::Mesh::create_quad(Vec3(-0.5f, -0.5f, 0), Vec2(1.f), false),
-        .tex_pipeline =
-            *render::Pipeline::create(PIPELINE_CREATE_ARGS(test, test, sg_query_backend())),
-        .color_pipeline =
-            *render::Pipeline::create(PIPELINE_CREATE_ARGS(color, color, sg_query_backend())),
-        .image = *render::Image::create_xor(),
-        .sampler =
-            *render::Sampler::create(render::Sampler::Filter::LINEAR,
-                                     render::Sampler::Border::BLACK, render::Sampler::Wrap::CLAMP),
-    });
+        .tex_pipeline = tex_pipeline,
+        .color_pipeline = color_pipeline,
+        .tex_material = *render::Material::create(tex_pipeline),
+        .color_material = *render::Material::create(color_pipeline),
+        .image = std::make_shared<render::Image>(*render::Image::create_xor()),
+        .sampler = std::make_shared<render::Sampler>(
+            *render::Sampler::create(render::Sampler::Filter::NEAREST,
+                                     render::Sampler::Border::BLACK, render::Sampler::Wrap::CLAMP)),
+    };
+    gfx.emplace(std::move(state));
 
     simgui_desc_t imgui_desc{};
     imgui_desc.logger.func = slog_func;
@@ -175,16 +182,16 @@ static void frame(void) {
 
     render::pass([=]() {
         Mat4 rot_mvp = Mat4(ar * Mat2(ct, st, -st, ct));
-        gfx->color_pipeline.set_uniform(rot_mvp, "vs_params", "mvp");
+        gfx->color_material.set_uniform(rot_mvp, "vs_params", "mvp");
 
-        render::draw(gfx->color_pipeline, gfx->color_mesh);
+        render::draw(gfx->color_material, gfx->color_mesh);
 
         Mat4 scale_mvp = Mat4(ar * Mat2(st));
-        gfx->tex_pipeline.set_texture(gfx->image, "tex0");
-        gfx->tex_pipeline.set_sampler(gfx->sampler, "smp0");
-        gfx->tex_pipeline.set_uniform(scale_mvp, "vs_params", "mvp");
+        gfx->tex_material.set_texture(gfx->image, "tex0");
+        gfx->tex_material.set_sampler(gfx->sampler, "smp0");
+        gfx->tex_material.set_uniform(scale_mvp, "vs_params", "mvp");
 
-        render::draw(gfx->tex_pipeline, gfx->white_mesh);
+        render::draw(gfx->tex_material, gfx->white_mesh);
 
         simgui_render();
     });
@@ -195,7 +202,7 @@ static void frame(void) {
 static void cleanup(void) {
     simgui_shutdown();
 
-    gfx = {};
+    gfx.reset();
 
     if (Option<render::CleanupError> error = render::cleanup()) {
         std::println("[RENDER] Cleanup Error: {}", (usize)error.value());

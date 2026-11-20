@@ -86,10 +86,10 @@ Option<PassError> pass(Fn<void> cmd, PassOpt pass_opt) {
     return {};
 }
 
-Option<DrawError> draw(Pipeline &pipeline, Mesh &mesh) {
-    pipeline.apply_pipeline();
-    pipeline.apply_uniforms();
-    auto bindings = pipeline._get_texsmp_bindings();
+Option<DrawError> draw(Material &material, Mesh &mesh) {
+    material._get_pipeline()._apply_pipeline();
+    material._apply_uniforms();
+    sg_bindings bindings = material._get_bindings();
     bindings.vertex_buffers[0] = mesh._get_vertex_buffer();
     bindings.index_buffer = mesh._get_index_buffer();
     sg_apply_bindings(bindings);
