@@ -13,12 +13,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v7
+      with:
+        submodules: recursive
 
-    - name: Checkout submodules
-      run: git submodule update --init --recursive
-
-    - uses: lukka/get-cmake@latest
+    - name: Install CMake
+      uses: lukka/get-cmake@latest
 
     - name: Setup emsdk
       uses: emscripten-core/setup-emsdk@v15
@@ -26,19 +27,27 @@ jobs:
         version: 6.0.3
         actions-cache-folder: 'emsdk-cache'
 
-    - name: Prepare build directory
+    - name: Install Ninja
+      shell: sh
       run: |
-        emcmake cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+        sudo apt-get install ninja-build
 
-    - name: Build static files
+    - name: Setup CCache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: pages-${{ github.job }}
+
+    - name: Build
+      shell: sh
       run: |
-        cmake --build build
+        emcmake cmake -S '${{ github.workspace }}' -B '${{ github.workspace }}/build' -G Ninja -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+        cmake --build '${{ github.workspace }}/build' --parallel
 
     - name: Upload static files
       id: deployment
       uses: actions/upload-pages-artifact@v3
       with:
-        path: build/
+        path: ${{ github.workspace }}/build
 
   deploy:
     environment:

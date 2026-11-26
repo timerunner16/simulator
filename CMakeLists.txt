@@ -113,38 +113,28 @@ target_link_libraries(simulator PRIVATE
 	resources)
 
 # SHADERGEN (sokol-shdc)
-set(shader_src ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders)
+include(FetchContent)
+
+FetchContent_Declare(
+	sokol-tools-bin
+	GIT_REPOSITORY https://github.com/timerunner16/sokol-tools-bin.git
+	GIT_TAG master
+	GIT_SHALLOW TRUE)
+FetchContent_MakeAvailable(sokol-tools-bin)
+include(${sokol-tools-bin_SOURCE_DIR}/sokol_shaders.cmake)
+
 set(shadergen_sources
-	${shader_src}/test.glsl
-	${shader_src}/color.glsl)
-
+	src/shaders/test.glsl
+	src/shaders/color.glsl)
 set(shadergen_langs glsl300es:spirv_vk)
-set(shadergen_out "")
-foreach(input IN LISTS shadergen_sources)
-	cmake_path(RELATIVE_PATH input
-		BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders
-		OUTPUT_VARIABLE input_relative)
-	cmake_path(REPLACE_EXTENSION
-		input_relative h
-		OUTPUT_VARIABLE output_relative)
-	set(output ${CMAKE_CURRENT_BINARY_DIR}/shaders_generated/${output_relative})
-	add_custom_command(
-		OUTPUT ${output}
-		COMMAND
-			sokol-shdc
-			-i ${input}
-			-o ${output}
-			-l ${shadergen_langs}
-			-r
-		DEPENDS ${input}
-		VERBATIM)
-	list(APPEND shadergen_out ${output})
-endforeach()
-
 add_library(shadergen INTERFACE)
-target_sources(shadergen INTERFACE ${shadergen_out})
+foreach (input IN LISTS shadergen_sources)
+	sokol_shader_with_reflection(${input} ${shadergen_langs})
+	target_sources(shadergen PRIVATE
+		${CMAKE_CURRENT_BINARY_DIR}/compile_shaders/${input}.h)
+endforeach()
 target_include_directories(shadergen INTERFACE
-	${CMAKE_CURRENT_BINARY_DIR}/shaders_generated)
+	${CMAKE_CURRENT_BINARY_DIR}/compile_shaders/src)
 
 target_link_libraries(simulator PRIVATE shadergen)
 
