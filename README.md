@@ -4,8 +4,7 @@ It's a robot simulator. There's robots! (once we make them.)
 ## Development
 
 This codebase is developed in modern C++ (as reasonable), using the C++23
-standard. The primary target is Web via Emscripten. Builds also should work on
-Linux (at least Arch); other platforms are untested.
+standard. The primary target is Web via Emscripten, with Linux tested as well.
 
 ## Project Structure
 
@@ -14,7 +13,7 @@ parallel easier.
 
 At the bottom of the system is core, depending only on external libraries; then
 four lower level libraries, which also depend on core; then two higher level
-libraries, depending on the lower level libraries; and game, which stiches
+libraries, depending on the lower level libraries; and game, which stitches
 everything together with an entrypoint.
 
 ```
@@ -83,20 +82,42 @@ Libraries used:
 Toolchain used:
 - [CMake](https://www.cmake.org/) for build system
 - [Emscripten](https://emscripten.org/) for targeting Web
+- [sokol-tools fork](https://github.com/timerunner16/sokol-tools) for shader build
 
 ## Build Instructions
+### Setup toolchain
+
+Install CMake, Emscripten, and the sokol-tools fork linked above. For
+sokol-tools, make sure sokol-shdc is in your path.
+
 ### Prepare the build
+
+Clone and setup the repo:
+
+```
+git clone https://github.com/Team1100/simulator
+cd simulator
+git submodule update --init
+```
+
+To setup web build, use emcmake:
 
 `emcmake cmake -B build -S .`
 
-### Build the app
+To setup Linux build, use cmake normally:
+
+`cmake -B build -S .`
+
+Once the build is set up, begin building:
 
 `cmake --build build`
 
-To build in parallel, optionally add the `-j N` flag where N is the number of
-threads to build with.
-
 ### Run the app
+
+Run a web build with emrun:
 
 `emrun build/index.html`
 
+Run a Linux build:
+
+`./build/simulator`

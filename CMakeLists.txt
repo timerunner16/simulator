@@ -68,8 +68,12 @@ add_library(core STATIC
 )
 target_include_directories(core INTERFACE core)
 
+target_link_libraries(imgui PUBLIC core)
+
 add_library(render STATIC
 	render/render.cxx)
+target_link_libraries(render PUBLIC core)
+target_link_libraries(render PUBLIC sokol)
 target_include_directories(render INTERFACE render)
 
 add_library(input STATIC
@@ -107,6 +111,42 @@ target_link_libraries(simulator PRIVATE
 	audio
 	entity
 	resources)
+
+# SHADERGEN (sokol-shdc)
+set(shader_src ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders)
+set(shadergen_sources
+	${shader_src}/test.glsl
+	${shader_src}/color.glsl)
+
+set(shadergen_langs glsl300es:spirv_vk)
+set(shadergen_out "")
+foreach(input IN LISTS shadergen_sources)
+	cmake_path(RELATIVE_PATH input
+		BASE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/src/shaders
+		OUTPUT_VARIABLE input_relative)
+	cmake_path(REPLACE_EXTENSION
+		input_relative h
+		OUTPUT_VARIABLE output_relative)
+	set(output ${CMAKE_CURRENT_BINARY_DIR}/shaders_generated/${output_relative})
+	add_custom_command(
+		OUTPUT ${output}
+		COMMAND
+			sokol-shdc
+			-i ${input}
+			-o ${output}
+			-l ${shadergen_langs}
+			-r
+		DEPENDS ${input}
+		VERBATIM)
+	list(APPEND shadergen_out ${output})
+endforeach()
+
+add_library(shadergen INTERFACE)
+target_sources(shadergen INTERFACE ${shadergen_out})
+target_include_directories(shadergen INTERFACE
+	${CMAKE_CURRENT_BINARY_DIR}/shaders_generated)
+
+target_link_libraries(simulator PRIVATE shadergen)
 
 if(EMSCRIPTEN)
 	set_target_properties(simulator PROPERTIES
