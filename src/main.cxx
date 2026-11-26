@@ -15,8 +15,8 @@
 
 #include <render/render.hxx>
 
-#include "color.h"
-#include "test.h"
+#include "shaders/color.glsl.h"
+#include "shaders/test.glsl.h"
 
 using namespace core;
 
