@@ -13,7 +13,7 @@
 
 #include "type/geom.hxx"
 
-#include "type/monad.hxx"
+#include "type/error.hxx"
 
 #include "type/function.hxx"
 

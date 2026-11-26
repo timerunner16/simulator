@@ -1,5 +1,7 @@
 #include <print>
 
+#include <core/core.hxx>
+
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "sokol_glue.h"
@@ -10,8 +12,6 @@
 #include "sokol_imgui.h"
 
 #include <sol/sol.hpp>
-
-#include <core/core.hxx>
 
 #include <render/render.hxx>
 
@@ -123,28 +123,25 @@ static void show_console() {
 }
 
 static void init(void) {
-    if (Option<render::InitError> error = render::init()) {
-        std::println("[RENDER] Init Error: {}", (usize)error.value());
-        sapp_quit();
-        return;
-    }
+    render::init().expect("[RENDER] Init Error");
 
-    auto tex_pipeline = std::make_shared<render::Pipeline>(
-        *render::Pipeline::create(PIPELINE_CREATE_ARGS(test, test, sg_query_backend())));
-    auto color_pipeline = std::make_shared<render::Pipeline>(
-        *render::Pipeline::create(PIPELINE_CREATE_ARGS(color, color, sg_query_backend())));
+    auto tex_pipeline = Shared<render::Pipeline>::create(
+        render::Pipeline::create(PIPELINE_CREATE_ARGS(test, test, sg_query_backend())).unwrap());
+    auto color_pipeline = Shared<render::Pipeline>::create(
+        render::Pipeline::create(PIPELINE_CREATE_ARGS(color, color, sg_query_backend())).unwrap());
     GfxState state = GfxState{
-        .framebuffer = *render::Framebuffer::create({sapp_widthf(), sapp_heightf()}),
-        .color_mesh = *render::Mesh::create_quad(Vec3(-0.5f, -0.5f, 0), Vec2(1.f), true),
-        .white_mesh = *render::Mesh::create_quad(Vec3(-0.5f, -0.5f, 0), Vec2(1.f), false),
+        .framebuffer = render::Framebuffer::create({512, 512}).unwrap(),
+        .color_mesh = render::Mesh::create_quad(Vec3(-0.5f, -0.5f, 0), Vec2(1.f), true).unwrap(),
+        .white_mesh = render::Mesh::create_quad(Vec3(-1.f, -1.f, 0), Vec2(2.f), false).unwrap(),
         .tex_pipeline = tex_pipeline,
         .color_pipeline = color_pipeline,
-        .tex_material = *render::Material::create(tex_pipeline),
-        .color_material = *render::Material::create(color_pipeline),
-        .image = std::make_shared<render::Image>(*render::Image::create_xor()),
+        .tex_material = render::Material::create(tex_pipeline).unwrap(),
+        .color_material = render::Material::create(color_pipeline).unwrap(),
+        .image = std::make_shared<render::Image>(render::Image::create_xor().unwrap()),
         .sampler = std::make_shared<render::Sampler>(
-            *render::Sampler::create(render::Sampler::Filter::NEAREST,
-                                     render::Sampler::Border::BLACK, render::Sampler::Wrap::CLAMP)),
+            render::Sampler::create(render::Sampler::Filter::NEAREST,
+                                    render::Sampler::Border::BLACK, render::Sampler::Wrap::CLAMP)
+                .unwrap()),
     };
     gfx.emplace(std::move(state));
 
@@ -175,28 +172,47 @@ static void frame(void) {
 
     show_console();
 
-    f32 t = sapp_frame_count() / 120.0f;
-    f32 st = sinf(t);
-    f32 ct = cosf(t);
-    Mat2 ar = Mat2(sapp_heightf() / sapp_widthf(), 0, 0, 1);
+    if (ImGui::Begin("Viewport")) {
+        f32 ar = gfx->framebuffer.get_size().y / gfx->framebuffer.get_size().x;
+        Vec2 region = ImGui::GetContentRegionAvail();
+        f32 s = std::min(region.x / ar, region.y);
+        Vec2 size(s * ar, s);
+        Vec2 pos = ImGui::GetCursorPos();
+        ImGui::SetCursorPos(pos + (region - size) * 0.5f);
+        ImGui::Image(simgui_imtextureid(gfx->framebuffer._get_color()->_get_tex_view()),
+                     ImVec2(s * ar, s));
+    }
+    ImGui::End();
 
-    render::pass([=]() {
-        Mat4 rot_mvp = Mat4(ar * Mat2(ct, st, -st, ct));
-        gfx->color_material.set_uniform(rot_mvp, "vs_params", "mvp");
+    render::PassOpt frame_opt{
+        .clear_color = Vec4{0.5f, 0.5f, 0.5f, 1.0f},
+          .framebuffer = gfx->framebuffer
+    };
+    render::pass(
+        []() {
+            f32 t = sapp_frame_count() / 120.0f;
+            f32 st = sinf(t);
+            f32 ct = cosf(t);
+            Mat2 ar = Mat2(gfx->framebuffer.get_size().y / gfx->framebuffer.get_size().x, 0, 0, 1);
 
-        render::draw(gfx->color_material, gfx->color_mesh);
+            Mat4 rot_mvp = Mat4(ar * Mat2(ct, st, -st, ct));
+            gfx->color_material.set_uniform(rot_mvp, "vs_params", "mvp");
 
-        Mat4 scale_mvp = Mat4(ar * Mat2(st));
-        gfx->tex_material.set_texture(gfx->image, "tex0");
-        gfx->tex_material.set_sampler(gfx->sampler, "smp0");
-        gfx->tex_material.set_uniform(scale_mvp, "vs_params", "mvp");
+            render::draw(gfx->color_material, gfx->color_mesh).unwrap();
 
-        render::draw(gfx->tex_material, gfx->white_mesh);
+            Mat4 scale_mvp = Mat4(0.5f * ar * Mat2(st));
+            gfx->tex_material.set_texture(gfx->image, "tex0");
+            gfx->tex_material.set_sampler(gfx->sampler, "smp0");
+            gfx->tex_material.set_uniform(scale_mvp, "vs_params", "mvp");
 
-        simgui_render();
-    });
+            render::draw(gfx->tex_material, gfx->white_mesh).unwrap();
+        },
+        frame_opt)
+        .expect("[RENDER] Pass Error");
 
-    render::present();
+    render::pass([]() { simgui_render(); }).expect("[RENDER] Pass Error");
+
+    render::present().expect("[RENDER] Present Error");
 }
 
 static void cleanup(void) {
@@ -204,8 +220,8 @@ static void cleanup(void) {
 
     gfx.reset();
 
-    if (Option<render::CleanupError> error = render::cleanup()) {
-        std::println("[RENDER] Cleanup Error: {}", (usize)error.value());
+    if (const auto result = render::cleanup(); !result.has_value()) {
+        std::println("[RENDER] Cleanup Error: {}", result.error().message());
         sapp_quit();
         return;
     }

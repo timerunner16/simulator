@@ -68,6 +68,8 @@ add_library(core STATIC
 )
 target_include_directories(core INTERFACE core)
 
+target_link_libraries(imgui PUBLIC core)
+
 add_library(render STATIC
 	render/render.cxx)
 target_link_libraries(render PUBLIC core)

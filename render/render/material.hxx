@@ -7,9 +7,7 @@
 #ifndef simulator_render_material_hxx
 #define simulator_render_material_hxx
 
-#include <algorithm>
 #include <core/core.hxx>
-#include <iterator>
 
 #include "sokol_gfx.h"
 
@@ -17,10 +15,19 @@
 #include "pipeline.hxx"
 #include "sampler.hxx"
 
+#include <cstring>
+
 // TODO: Global uniforms
 
 namespace render {
 using namespace core;
+
+#define MATERIAL_ERROR(X) X(bad_pipeline, 1, "bad pipeline")
+
+DEFINE_ERRCODE(MaterialError, MATERIAL_ERROR, 1, render)
+#undef MATERIAL_ERROR
+
+String get_error_string(const MaterialError error);
 
 class _Uniforms {
   private:
@@ -40,35 +47,7 @@ class _Uniforms {
           m_ub_sizes(ub_sizes), m_program_layout(program_layout) {}
 
   public:
-    static _Uniforms create(const _ProgramLayout &program_layout) {
-        Vector<Shared<Image>> tex_refs;
-        Vector<Shared<Sampler>> smp_refs;
-
-        for (auto &[tex_name, tex_desc] : program_layout.get_tex_map())
-            tex_refs.push_back(nullptr);
-        for (auto &[smp_name, smp_desc] : program_layout.get_smp_map())
-            smp_refs.push_back(nullptr);
-
-        Vector<u8> ub_data;
-        auto ub_map = program_layout.get_ub_map();
-        Vector<_ubDesc> ub_vec;
-        std::transform(ub_map.begin(), ub_map.end(), std::back_inserter(ub_vec),
-                       [](auto p) { return p.second; });
-        std::sort(ub_vec.begin(), ub_vec.end(),
-                  [](_ubDesc a, _ubDesc b) { return a.slot < b.slot; });
-        Vector<usize> ub_offsets(ub_vec.size());
-        Vector<usize> ub_sizes(ub_vec.size());
-
-        usize offset = 0;
-        for (auto ub_desc : ub_vec) {
-            ub_data.resize(ub_data.size() + ub_desc.size, 0);
-            ub_offsets[ub_desc.slot] = offset;
-            ub_sizes[ub_desc.slot] = ub_desc.size;
-            offset += ub_desc.size;
-        }
-
-        return _Uniforms(tex_refs, smp_refs, ub_data, ub_offsets, ub_sizes, program_layout);
-    }
+    static _Uniforms create(const _ProgramLayout &program_layout);
 
     template <typename T, typename = std::enable_if<util::is_uniform_type_v<T>>>
     void set_uniform(T data, String ub_name, String u_name) {
@@ -130,15 +109,7 @@ class Material {
         : m_pipeline(pipeline), m_uniforms(uniforms) {}
 
   public:
-    static Option<Material> create(Shared<Pipeline> pipeline) {
-        if (!pipeline)
-            return {};
-        const _ProgramLayout &layout = pipeline->_get_layout();
-
-        _Uniforms uniforms = _Uniforms::create(layout);
-
-        return Material(pipeline, uniforms);
-    }
+    static Result<Material> create(Shared<Pipeline> pipeline);
 
     template <typename T, typename = std::enable_if<util::is_uniform_type_v<T>>>
     void set_uniform(T data, String ub_name, String u_name) {

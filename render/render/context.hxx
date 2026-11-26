@@ -17,37 +17,69 @@
 namespace render {
 using namespace core;
 
-enum class InitError {
-    ALREADY_INITIALIZED,
+#define INIT_ERROR(X)                                                                              \
+    X(already_initialized, 1, "already initialized")                                               \
+    X(gfx_failed, 2, "sokol gfx failed to init")
 
-    UNKNOWN_INIT_ERROR,
-};
+DEFINE_ERRCODE(InitError, INIT_ERROR, 1, render)
+#undef INIT_ERROR
 
-enum class CleanupError {
-    NOT_INITIALIZED,
-    IN_PASS,
+#define CLEANUP_ERROR(X)                                                                           \
+    X(not_initialized, 1, "cleanup when not initialized")                                          \
+    X(in_pass, 2, "cleanup when mid-pass")
 
-    UNKNOWN_CLEANUP_ERROR,
-};
+DEFINE_ERRCODE(CleanupError, CLEANUP_ERROR, 1, render)
+#undef CLEANUP_ERROR
 
-enum class PresentError {
-    NOT_INITIALIZED,
-    IN_PASS,
+#define PRESENT_ERROR(X)                                                                           \
+    X(not_initialized, 1, "present when not initialized")                                          \
+    X(in_pass, 2, "present while mid-pass")
 
-    UNKNOWN_PRESENT_ERROR,
-};
+DEFINE_ERRCODE(PresentError, PRESENT_ERROR, 1, render)
+#undef CLEANUP_ERROR
 
-enum class PassError {
-    NESTING_PASS,
-    NOT_INITIALIZED,
+#define PASS_ERROR(X)                                                                              \
+    X(not_initialized, 1, "pass when not initialized")                                             \
+    X(nesting_pass, 2, "nesting pass")
 
-    UNKNOWN_PASS_ERROR,
-};
+DEFINE_ERRCODE(PassError, PASS_ERROR, 1, render)
+#undef PASS_ERROR
 
-[[nodiscard]] Option<InitError> init();
-[[nodiscard]] Option<CleanupError> cleanup();
+#define DRAW_ERROR(X)                                                                              \
+    X(not_initialized, 1, "draw when not initialized")                                             \
+    X(not_in_pass, 2, "draw when not in pass")                                                     \
+    X(no_vertex_buffer, 3, "draw with no vertex buffer")                                           \
+    X(no_index_buffer, 4, "draw with no index buffer")                                             \
+    X(no_index_count, 5, "draw with no index count")
 
-Option<PresentError> present();
+DEFINE_ERRCODE(DrawError, DRAW_ERROR, 1, render)
+#undef DRAW_ERROR
+
+/**
+ * @brief Start the render library.
+ *
+ * Initialize the render library:
+ * - initialize underlying graphics API
+ * - prepare internal render state
+ *
+ * Will fail if called multiple times without a cleanup.
+ */
+Result<void> init();
+
+/**
+ * @brief Shutdown the render library.
+ *
+ * Clean up the render library:
+ * - shutdown underlying graphics API
+ * - cleanup render state
+ *
+ * Will fail if called while not initialized.
+ */
+Result<void> cleanup();
+
+[[nodiscard]] bool is_active();
+
+Result<void> present();
 
 enum class LoadOpt {
     LOAD,
@@ -57,16 +89,12 @@ enum class LoadOpt {
 struct PassOpt {
     LoadOpt loadopt = LoadOpt::CLEAR;
     Vec4 clear_color = {0.05f, 0.1f, 0.2f, 1.0f};
-    OptionRef<Framebuffer> framebuffer = {};
+    Option<Framebuffer &> framebuffer = {};
 };
 
-Option<PassError> pass(Fn<void> cmd, PassOpt pass_opt = {});
+Result<void> pass(Fn<void> cmd, PassOpt pass_opt = {});
 
-enum class DrawError {
-    UNKNOWN_DRAW_ERROR,
-};
-
-Option<DrawError> draw(Material &material, Mesh &mesh);
+Result<void> draw(Material &material, Mesh &mesh);
 } // namespace render
 
 #endif

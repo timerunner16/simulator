@@ -14,43 +14,34 @@
 namespace render {
 using namespace core;
 
+#define FRAMEBUFFER_ERROR(X) X(invalid_dimensions, 1, "width and height must be greater than 0")
+
+DEFINE_ERRCODE(FramebufferError, FRAMEBUFFER_ERROR, 1, render)
+
+#undef FRAMEBUFFER_ERROR
+
 class Framebuffer {
   private:
-    Image m_color;
-    Image m_depth;
+    Shared<Image> m_color;
+    Shared<Image> m_depth;
 
     Vec2 m_dims;
 
-    explicit Framebuffer(Image color, Image depth, const Vec2 &dims)
-        : m_color(std::move(color)), m_depth(std::move(depth)), m_dims(dims) {};
+    explicit Framebuffer(Shared<Image> color, Shared<Image> depth, const Vec2 &dims) noexcept
+        : m_color(color), m_depth(depth), m_dims(dims) {};
 
   public:
-    static Option<Framebuffer> create(const Vec2 &dims) {
-        if (dims.x < 0 || dims.y < 0)
-            return {};
-
-        auto color_opt = Image::create_empty_color(dims);
-        if (!color_opt.has_value())
-            return {};
-        Image color = std::move(*color_opt);
-
-        auto depth_opt = Image::create_empty_depth(dims);
-        if (!depth_opt.has_value())
-            return {};
-        Image depth = std::move(*depth_opt);
-
-        return Framebuffer(std::move(color), std::move(depth), dims);
-    }
+    static Result<Framebuffer> create(const Vec2 &dims);
 
     Vec2 get_size() {
         return m_dims;
     }
 
-    const Image &_get_color() {
+    const Shared<Image> _get_color() {
         return m_color;
     }
 
-    const Image &_get_depth() {
+    const Shared<Image> _get_depth() {
         return m_depth;
     }
 };
